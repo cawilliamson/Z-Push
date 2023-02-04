@@ -891,26 +891,32 @@ class Mail_mimeDecode
         }
 
         if ($detectCharset && strtolower($charset) != $this->_charset) {
-            if (@mb_check_encoding($input, $charset) == false) {
-                // list of encodings, sorted by priority to assist mb_detect_encoding()
-                $encodingPriority = array('UTF-8', 'SJIS', 'GB18030', 'ISO-8859-1', 'ISO-8859-2', 'ISO-8859-3', 'ISO-8859-4',
-                    'ISO-8859-5', 'ISO-8859-6', 'ISO-8859-7', 'ISO-8859-8', 'ISO-8859-9', 'ISO-8859-10', 'ISO-8859-13',
-                    'ISO-8859-14', 'ISO-8859-15', 'ISO-8859-16', 'WINDOWS-1252', 'WINDOWS-1251', 'EUC-JP', 'EUC-TW',
-                    'KOI8-R', 'BIG-5', 'ISO-2022-KR', 'ISO-2022-JP-MS');
+            // list of encodings, sorted by priority to assist mb_detect_encoding()
+            $encodingPriority = array('UTF-8', 'SJIS', 'GB18030', 'ISO-8859-1', 'ISO-8859-2', 'ISO-8859-3', 'ISO-8859-4',
+            'ISO-8859-5', 'ISO-8859-6', 'ISO-8859-7', 'ISO-8859-8', 'ISO-8859-9', 'ISO-8859-10', 'ISO-8859-13',
+            'ISO-8859-14', 'ISO-8859-15', 'ISO-8859-16', 'WINDOWS-1252', 'WINDOWS-1251', 'EUC-JP', 'EUC-TW',
+            'KOI8-R', 'BIG-5', 'ISO-2022-KR', 'ISO-2022-JP-MS');
 
-                // only use encodings supported by the system
-                $encodings = array_unique(array_merge($encodingPriority, mb_list_encodings()));
+            // only use encodings supported by the system
+            $encodings = array_unique(array_merge($encodingPriority, mb_list_encodings()));
 
-                // detect suitable encoding
-                if (@mb_check_encoding($input, ($encoding = mb_detect_encoding($input, $encodings)))) {
-                    ZLog::Write(LOGLEVEL_WARN, sprintf("mimeDecode::_decodeBody(): invalid encoding in body: using '%s' instead of '%s'", $encoding, $charset));
-                    $charset = $encoding;
+            try {
+                if (@mb_check_encoding($input, $charset) == false) {
+                    // detect suitable encoding
+                    if (@mb_check_encoding($input, ($encoding = mb_detect_encoding($input, $encodings)))) {
+                        ZLog::Write(LOGLEVEL_WARN, sprintf("mimeDecode::_decodeBody(): invalid encoding in body: using '%s' instead of '%s'", $encoding, $charset));
+                        $charset = $encoding;
+                    }
+                    else {
+                        ZLog::Write(LOGLEVEL_WARN, sprintf("mimeDecode::_decodeBody(): invalid encoding '%s' used in body, no substitution found", $charset));
+                    }
                 }
-                else {
-                    ZLog::Write(LOGLEVEL_WARN, sprintf("mimeDecode::_decodeBody(): invalid encoding '%s' used in body, no substitution found", $charset));
-                }
+            
+                $input = @mb_convert_encoding($input, $this->_decode_headers, $charset);
+            } catch (\Error $e) {
+                // mb_check_encoding might throw an ValueError on PHP 8 if the given encoding does not exist
+                // we can't simply catch ValueError as it was introduced in PHP 8
             }
-            $input = @mb_convert_encoding($input, $this->_decode_headers, $charset);
         }
 
         return $input;
